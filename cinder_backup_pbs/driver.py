@@ -63,8 +63,12 @@ class PbsBackupDriver(_BASE_CLS):
     """Stores cinder volume backups in a Proxmox Backup Server."""
 
     def __init__(self, context, db=None):
+        # cinder's BackupDriver.__init__ takes only `context`. The legacy
+        # `db` parameter is kept on our signature for callers that still
+        # pass it but it's ignored.
+        del db
         if backup_driver is not None:
-            super().__init__(context, db)
+            super().__init__(context)
         self.cfg = CONF.pbs_backup
         self.pbs = PbsClient(
             repository=self.cfg.repository,
