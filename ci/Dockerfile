@@ -29,10 +29,14 @@ RUN apt-get update \
         rbd-nbd \
  && rm -rf /var/lib/apt/lists/*
 
-# Install the driver
+# Install the driver into the cinder venv.
+# The upstream image's venv has no `pip`, so bootstrap via `ensurepip`
+# (same trick as the horizon-ironic image; see docs/custom-images.md
+# in the cluster repo).
 COPY pyproject.toml /opt/cinder-backup-pbs/
 COPY cinder_backup_pbs /opt/cinder-backup-pbs/cinder_backup_pbs
-RUN /var/lib/openstack/bin/pip install --no-cache-dir /opt/cinder-backup-pbs
+RUN /var/lib/openstack/bin/python -m ensurepip --upgrade \
+ && /var/lib/openstack/bin/python -m pip install --no-cache-dir /opt/cinder-backup-pbs
 
 # Pre-create the tmpfs mountpoint and cache subdir.
 # Actual tmpfs mount happens at pod startup via emptyDir.
