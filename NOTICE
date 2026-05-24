@@ -1,0 +1,11 @@
+cinder-backup-pbs
+Copyright 2026 Pawhost
+
+Licensed under the Apache License, Version 2.0.
+
+Runtime dependency:
+  proxmox-backup-client (AGPLv3)
+  https://git.proxmox.com/?p=proxmox-backup.git
+  Installed from the Proxmox apt repository (download.proxmox.com).
+  Invoked as a separate process. Not modified.
+  Source: https://git.proxmox.com/?p=proxmox-backup.git

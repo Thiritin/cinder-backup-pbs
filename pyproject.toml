@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cinder-backup-pbs"
+version = "0.1.0"
+description = "Cinder backup driver for Proxmox Backup Server"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Pawhost" }]
+dependencies = [
+    "oslo.config>=9.0",
+    "oslo.log>=5.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "pytest-mock>=3.12",
+]
+
+[project.entry-points."cinder.backup.drivers"]
+pbs = "cinder_backup_pbs.driver:PbsBackupDriver"
+
+[tool.setuptools.packages.find]
+include = ["cinder_backup_pbs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
