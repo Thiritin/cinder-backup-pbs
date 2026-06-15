@@ -5,7 +5,7 @@ pbs_opts = [
         "repository",
         help=(
             "PBS repository URL: <token-id>@<host>:<datastore>. "
-            "Example: cinder@pbs!nightly@10.100.72.80:RAID5"
+            "Example: cinder@pbs!openstack@pbs.example.com:RAID5"
         ),
     ),
     cfg.StrOpt(

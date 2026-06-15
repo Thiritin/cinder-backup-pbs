@@ -3,11 +3,11 @@
 # Usage:
 #   ./ci/build-image.sh [tag]
 # Env:
-#   REGISTRY  (default: registry.eu-west-1.cloud.pawhost.de)
+#   REGISTRY  (default: registry.example.com)
 #   CINDER_BASE_IMAGE  (default: quay.io/airshipit/cinder:2026.1-ubuntu_noble)
 set -euo pipefail
 
-REGISTRY="${REGISTRY:-registry.eu-west-1.cloud.pawhost.de}"
+REGISTRY="${REGISTRY:-registry.example.com}"
 CINDER_BASE_IMAGE="${CINDER_BASE_IMAGE:-quay.io/airshipit/cinder:2026.1-ubuntu_noble}"
 TAG="${1:-$(git rev-parse --short HEAD)}"
 IMAGE="${REGISTRY}/cinder-backup-pbs:${TAG}"

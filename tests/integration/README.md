@@ -19,7 +19,7 @@ run when the required environment is present.
 Set these before running:
 
 ```bash
-export PBS_IT_REPOSITORY='cinder@pbs!ci@10.100.72.80:RAID5'
+export PBS_IT_REPOSITORY='cinder@pbs!ci@pbs.example.com:RAID5'
 export PBS_IT_FINGERPRINT='e6:8e:...:2d'
 export PBS_IT_PASSWORD_FILE=/etc/pbs/ci-token
 export PBS_IT_NAMESPACE='openstack/ci'        # throwaway; test forgets after

@@ -84,17 +84,25 @@ pip install git+https://github.com/pawhost/cinder-backup-pbs@main
 ```
 
 It needs `proxmox-backup-client`, `ceph-common`, and `rbd-nbd` present in
-the same image as `cinder-backup`. Two supported ways to build that image:
+the same image as `cinder-backup`. Three options:
+
+- **Pull the prebuilt image** (openstack-helm path) — published to GitHub
+  Container Registry on every tagged release:
+
+  ```
+  docker pull ghcr.io/thiritin/cinder-backup-pbs:latest
+  ```
 
 - **kolla-ansible** — use `kolla/template-overrides.j2`. See
-  [`docs/kolla.md`](docs/kolla.md).
-- **openstack-helm / airship** — use `ci/Dockerfile`. See
+  [`docs/kolla.md`](docs/kolla.md). (Kolla builds its own image, so it
+  does not use the ghcr image.)
+- **openstack-helm / airship, custom build** — use `ci/Dockerfile`. See
   [`docs/install.md`](docs/install.md).
 
 ## Build
 
 ```
-docker build -t registry.example/cinder-backup-pbs:dev -f ci/Dockerfile .
+docker build -t registry.example.com/cinder-backup-pbs:dev -f ci/Dockerfile .
 ```
 
 ## Configure
@@ -106,8 +114,8 @@ In cinder `cinder.conf`:
 backup_driver = cinder_backup_pbs.driver.PbsBackupDriver
 
 [pbs_backup]
-repository = tin@pbs!openstack@10.100.72.80:RAID5
-fingerprint = e6:8e:9d:...:2d
+repository = cinder@pbs!openstack@pbs.example.com:RAID5
+fingerprint = aa:bb:cc:...:ff
 password_file = /etc/cinder/pbs-token
 namespace_prefix = openstack
 rbd_pool = cinder-volumes
@@ -125,16 +133,16 @@ pytest tests/unit
 Integration tests need a reachable PBS plus a Ceph RBD pool. See
 `tests/integration/README.md`.
 
-## Limitations (the fine print, told honestly)
+## Limitations
 
 - No `--incremental` API surface. PBS deduplicates implicitly across
   every backup in a namespace, so cinder `parent_id` is always `None`.
-  Every backup is "full" and also somehow tiny. Don't think about it
-  too hard.
-- No backup-of-backup. Want off-site? Use PBS `sync-job` and let the
-  grown-ups handle replication.
-- Retention is **not** enforced here. Drive cinder `volume backup
-  delete` from a scheduler (cron, a WHMCS hook, a very reliable intern).
+  Every backup is logically a full, but only the changed chunks hit the
+  wire and the datastore.
+- No backup-of-backup. For off-site copies, use PBS `sync-job` to
+  replicate to a second PBS instance.
+- Retention is not enforced here. Drive cinder `volume backup delete`
+  from your own scheduler (cron, a WHMCS hook, whatever you already run).
 
 ---
 

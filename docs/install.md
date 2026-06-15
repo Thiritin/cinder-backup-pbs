@@ -25,15 +25,24 @@ Example:
 ```bash
 proxmox-backup-manager user generate-token cinder@pbs nightly
 proxmox-backup-manager acl update /datastore/RAID5/openstack \
-    DatastoreBackup --auth-id 'cinder@pbs!nightly'
+    DatastoreBackup --auth-id 'cinder@pbs!openstack'
 proxmox-backup-manager acl update /datastore/RAID5/openstack \
-    DatastoreReader --auth-id 'cinder@pbs!nightly'
+    DatastoreReader --auth-id 'cinder@pbs!openstack'
 ```
 
-## Build the image
+## Get the image
+
+Pull the prebuilt image (published to GitHub Container Registry on every
+tagged release):
 
 ```bash
-REGISTRY=registry.eu-west-1.cloud.pawhost.de ./ci/build-image.sh
+docker pull ghcr.io/thiritin/cinder-backup-pbs:latest
+```
+
+Or build your own:
+
+```bash
+REGISTRY=registry.example.com ./ci/build-image.sh
 ```
 
 The build:
@@ -51,15 +60,15 @@ The build:
 ```yaml
 images:
   tags:
-    cinder_backup: "registry.eu-west-1.cloud.pawhost.de/cinder-backup-pbs:<tag>"
+    cinder_backup: "registry.example.com/cinder-backup-pbs:<tag>"
 
 conf:
   cinder:
     DEFAULT:
       backup_driver: cinder_backup_pbs.driver.PbsBackupDriver
     pbs_backup:
-      repository: "cinder@pbs!nightly@10.100.72.80:RAID5"
-      fingerprint: "e6:8e:9d:...:2d"
+      repository: "cinder@pbs!openstack@pbs.example.com:RAID5"
+      fingerprint: "aa:bb:cc:...:ff"
       password_file: /etc/cinder/pbs-token
       namespace_prefix: openstack
       rbd_pool: cinder-volumes
@@ -131,5 +140,5 @@ Check PBS:
 
 ```bash
 proxmox-backup-client snapshot list --ns openstack/<project_id> \
-  --repository cinder@pbs!nightly@10.100.72.80:RAID5
+  --repository cinder@pbs!openstack@pbs.example.com:RAID5
 ```

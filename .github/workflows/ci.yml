@@ -39,3 +39,51 @@ jobs:
         with:
           name: dist
           path: dist/*
+
+  # Test the openstack-helm / airship deploy path: the ci/Dockerfile image
+  # actually builds (no push here; the publish-image workflow pushes on tags).
+  helm-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ci/Dockerfile
+          failure-threshold: error
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ci/Dockerfile
+          push: false
+
+  # Test the kolla-ansible deploy path: render the cinder-backup image
+  # Dockerfile with our template-override and assert it injects the PBS
+  # tooling. Template-only — does not build the kolla image.
+  kolla-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install kolla
+        # kolla-build imports the docker python lib even for --template-only.
+        run: pip install 'kolla>=18,<19' docker
+      - name: Render cinder-backup Dockerfile
+        run: |
+          kolla-build \
+            --template-only \
+            --work-dir /tmp/kolla-out \
+            --base ubuntu \
+            --template-override kolla/template-overrides.j2 \
+            cinder-backup
+      - name: Assert PBS tooling injected
+        run: |
+          dockerfile=/tmp/kolla-out/docker/cinder/cinder-backup/Dockerfile
+          test -f "$dockerfile"
+          grep -q proxmox-backup-client "$dockerfile"
+          grep -q rbd-nbd "$dockerfile"
+          grep -q cinder-backup-pbs "$dockerfile"

@@ -48,8 +48,8 @@ a file at `/etc/kolla/config/cinder/cinder-backup.conf`:
 backup_driver = cinder_backup_pbs.driver.PbsBackupDriver
 
 [pbs_backup]
-repository = cinder@pbs!nightly@10.100.72.80:RAID5
-fingerprint = e6:8e:9d:...:2d
+repository = cinder@pbs!openstack@pbs.example.com:RAID5
+fingerprint = aa:bb:cc:...:ff
 password_file = /etc/cinder/pbs-token
 namespace_prefix = openstack
 rbd_pool = cinder-volumes

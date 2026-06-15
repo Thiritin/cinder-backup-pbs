@@ -1,9 +1,9 @@
 {#-
   Kolla image template-override for the cinder-backup-pbs driver.
 
-  Use with kolla-build to bake proxmox-backup-client + rbd-nbd + the driver
-  into the stock kolla `cinder-backup` image, instead of maintaining a
-  separate airship-based Dockerfile.
+  Use with kolla-build to bake proxmox-backup-client + ceph-common +
+  rbd-nbd + the driver into the stock kolla `cinder-backup` image, instead
+  of maintaining a separate airship-based Dockerfile.
 
   In /etc/kolla/kolla-build.conf:
 
@@ -15,25 +15,28 @@
     kolla-build --config-file /etc/kolla/kolla-build.conf cinder-backup
 
   Notes:
-  * Targets the Ubuntu (Noble) kolla base. For the CentOS/Rocky base, swap
-    the apt stanza for the equivalent yum repo + dnf install.
-  * `PBS_PKG_VERSION` pins proxmox-backup-client so our stderr-string error
-    matching (namespace-exists / snapshot-not-found) stays valid across
-    rebuilds. Bump deliberately, then re-run the integration suite.
+  * Targets the Ubuntu kolla base. For the CentOS/Rocky base, swap the apt
+    stanza for the equivalent yum repo + dnf install.
+  * Everything (OS packages + driver) is installed in the footer block so
+    the override does not depend on kolla's package-list internals; it only
+    needs the `cinder_backup_footer` block to exist, which it does on all
+    supported kolla releases.
 -#}
 {% extends parent_template %}
-
-{% set cinder_backup_packages_append = ['ceph-common', 'rbd-nbd'] %}
 
 {% block cinder_backup_footer %}
 USER root
 
+# proxmox-backup-client (from the Proxmox apt repo) + ceph-common + rbd-nbd.
 RUN curl -fsSL https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
         -o /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg \
  && echo "deb http://download.proxmox.com/debian/pbs-client bookworm main" \
         > /etc/apt/sources.list.d/pbs-client.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends proxmox-backup-client \
+ && apt-get install -y --no-install-recommends \
+        proxmox-backup-client \
+        ceph-common \
+        rbd-nbd \
  && rm -rf /var/lib/apt/lists/*
 
 {# Install the driver into the kolla python environment, registering the
