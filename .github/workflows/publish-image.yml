@@ -5,12 +5,21 @@ name: publish-image
 # image with kolla-build; this published image is for the helm path (and
 # works as a kolla base too).
 #
-# Triggers: version tags (v*) and manual dispatch. PRs only build, no push
-# (see the ci workflow).
+# Triggers:
+#   * version tags (v*)        -> push <version> + latest
+#   * weekly schedule (Mon)    -> rebuild to pick up upstream cinder base
+#                                 patches + latest driver main; push
+#                                 weekly-<date> + latest
+#   * manual dispatch          -> on-demand rebuild
+# PRs only build, no push (see the ci workflow).
 
 on:
   push:
     tags: ["v*"]
+  schedule:
+    # Mondays 04:00 UTC. Rebuild keeps :latest fresh against upstream
+    # quay.io/airshipit/cinder base-image security updates.
+    - cron: "0 4 * * 1"
   workflow_dispatch:
     inputs:
       cinder_base_image:
@@ -45,8 +54,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
-            type=sha,prefix=,enable=${{ github.ref_type != 'tag' }}
+            type=schedule,pattern=weekly-{{date 'YYYYMMDD'}}
+            type=raw,value=latest,enable=${{ github.event_name == 'schedule' || github.ref_type == 'tag' }}
+            type=sha,prefix=,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -55,6 +65,9 @@ jobs:
           file: ci/Dockerfile
           build-args: |
             CINDER_IMAGE=${{ env.CINDER_BASE_IMAGE }}
+          # Always refetch the base image so weekly rebuilds pick up upstream
+          # cinder security patches instead of a cached layer.
+          pull: true
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
