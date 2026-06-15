@@ -16,6 +16,24 @@ def _cp(rc=0, stdout=b"", stderr=b""):
     return subprocess.CompletedProcess(args=[], returncode=rc, stdout=stdout, stderr=stderr)
 
 
+def test_keyring_flag_omitted_when_unset(rbd):
+    fake = MagicMock(return_value=_cp())
+    with patch("cinder_backup_pbs.rbd_helper.subprocess.run", fake):
+        rbd.snap_create("img-1", "snap-x")
+    cmd = fake.call_args[0][0]
+    assert "--keyring" not in cmd
+
+
+def test_keyring_flag_passed_when_set():
+    rbd = RbdHelper(pool="p", user="cinder", keyring="/etc/ceph/k.keyring")
+    fake = MagicMock(return_value=_cp(stdout=b"/dev/nbd0\n"))
+    with patch("cinder_backup_pbs.rbd_helper.subprocess.run", fake):
+        rbd.nbd_map("img-1")
+    cmd = fake.call_args[0][0]
+    assert "--keyring" in cmd
+    assert "/etc/ceph/k.keyring" in cmd
+
+
 def test_nbd_map_returns_dev_path(rbd):
     with patch("cinder_backup_pbs.rbd_helper.subprocess.run",
                return_value=_cp(stdout=b"/dev/nbd0\n")):
@@ -51,7 +69,6 @@ def test_staged_snapshot_cleans_up_on_success(rbd):
             pass
 
     # Expect: create, protect, unprotect, rm — in order.
-    op_seq = [c[3] if len(c) > 3 else c for c in calls]
     # Extract the snap action verb (positions vary by argv layout)
     verbs = []
     for c in calls:

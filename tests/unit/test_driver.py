@@ -162,6 +162,44 @@ def test_restore_raises_when_dd_exits_nonzero(drv):
             drv.restore(backup, "vol-target", volume_file=None)
 
 
+def test_check_for_setup_error_passes(drv, tmp_path):
+    pw = tmp_path / "tok"
+    pw.write_text("secret")
+    drv.cfg = SimpleNamespace(
+        repository="tok@h:store",
+        fingerprint="aa:bb",
+        password_file=str(pw),
+        pbs_tmpdir=str(tmp_path),
+    )
+    with patch("cinder_backup_pbs.driver.os.path.exists", return_value=True):
+        drv.check_for_setup_error()  # no raise
+
+
+def test_check_for_setup_error_missing_repository(drv, tmp_path):
+    drv.cfg = SimpleNamespace(
+        repository=None,
+        fingerprint="aa:bb",
+        password_file=str(tmp_path / "tok"),
+        pbs_tmpdir=str(tmp_path),
+    )
+    with pytest.raises(PbsBackupError):
+        drv.check_for_setup_error()
+
+
+def test_check_for_setup_error_binary_missing(drv, tmp_path):
+    pw = tmp_path / "tok"
+    pw.write_text("secret")
+    drv.cfg = SimpleNamespace(
+        repository="tok@h:store",
+        fingerprint="aa:bb",
+        password_file=str(pw),
+        pbs_tmpdir=str(tmp_path),
+    )
+    with patch("cinder_backup_pbs.driver.os.path.exists", return_value=False):
+        with pytest.raises(PbsBackupError):
+            drv.check_for_setup_error()
+
+
 def test_export_and_import_record_roundtrip(drv):
     backup = _fake_backup_row()
     backup.service_metadata = '{"snapshot_path": "x"}'

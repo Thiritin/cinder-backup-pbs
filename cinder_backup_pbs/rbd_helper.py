@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import subprocess
-from typing import Iterator
+from collections.abc import Iterator
 
 from oslo_log import log as logging
 
@@ -28,18 +28,27 @@ class RbdHelper:
         self,
         pool: str,
         user: str = "cinder",
+        keyring: str | None = None,
     ) -> None:
         self.pool = pool
         self.user = user
+        self.keyring = keyring
 
     # -- low-level ------------------------------------------------------
+
+    def _auth(self) -> list[str]:
+        """Common auth flags for rbd / rbd-nbd. Includes --keyring only when
+        configured; otherwise ceph falls back to its default keyring search."""
+        args = ["--id", self.user]
+        if self.keyring:
+            args += ["--keyring", self.keyring]
+        return args
 
     def _run(self, args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
         LOG.debug("rbd cmd: %s", " ".join(args))
         proc = subprocess.run(
             args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=timeout,
             check=False,
         )
@@ -54,25 +63,25 @@ class RbdHelper:
 
     def snap_create(self, image: str, snap_name: str) -> None:
         self._run(
-            ["rbd", "--id", self.user, "-p", self.pool,
+            ["rbd", *self._auth(), "-p", self.pool,
              "snap", "create", f"{image}@{snap_name}"]
         )
 
     def snap_protect(self, image: str, snap_name: str) -> None:
         self._run(
-            ["rbd", "--id", self.user, "-p", self.pool,
+            ["rbd", *self._auth(), "-p", self.pool,
              "snap", "protect", f"{image}@{snap_name}"]
         )
 
     def snap_unprotect(self, image: str, snap_name: str) -> None:
         self._run(
-            ["rbd", "--id", self.user, "-p", self.pool,
+            ["rbd", *self._auth(), "-p", self.pool,
              "snap", "unprotect", f"{image}@{snap_name}"]
         )
 
     def snap_rm(self, image: str, snap_name: str) -> None:
         self._run(
-            ["rbd", "--id", self.user, "-p", self.pool,
+            ["rbd", *self._auth(), "-p", self.pool,
              "snap", "rm", f"{image}@{snap_name}"]
         )
 
@@ -80,7 +89,7 @@ class RbdHelper:
 
     def nbd_map(self, target: str, read_only: bool = False) -> str:
         """Map ``<pool>/<image>[@<snap>]`` via rbd-nbd. Returns the /dev/nbdN path."""
-        args = ["rbd-nbd", "--id", self.user, "map", f"{self.pool}/{target}"]
+        args = ["rbd-nbd", *self._auth(), "map", f"{self.pool}/{target}"]
         if read_only:
             args.append("--read-only")
         proc = self._run(args, timeout=60)

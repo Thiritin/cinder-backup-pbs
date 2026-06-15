@@ -1,25 +1,39 @@
 # cinder-backup-pbs
 
-Out-of-tree Cinder backup driver that stores deduplicated backups in a
-Proxmox Backup Server (PBS) instance.
+> The best\* Backup Server, meet the best\* Open Source Cloud.
 
-Cinder receives standard `openstack volume backup create/restore/delete`
-API calls. The driver shells out to `proxmox-backup-client` (AGPLv3,
-unmodified, process boundary) and writes chunked, deduplicated,
-content-addressed backups to a PBS datastore.
+This is the duct tape between two pieces of software that were never
+supposed to talk to each other and are honestly much happier now that
+they do: **Proxmox Backup Server** (the best\* backup server) and
+**OpenStack Cinder** (the best\* open source cloud's block storage).
+
+Cinder thinks it's talking to a normal backup target. PBS thinks a
+normal client is talking to it. Neither suspects a thing. In the middle
+sits an out-of-tree Cinder backup driver that stores deduplicated,
+content-addressed, chunked backups in a PBS datastore.
+
+You point `openstack volume backup create/restore/delete` at it like you
+always have. Under the hood the driver shells out to
+`proxmox-backup-client` and lets PBS do what PBS does disturbingly well:
+pretend your fleet is much smaller than it actually is.
 
 ## Status
 
-Pre-production. Targets OpenStack 2026.1 with Ceph RBD volume backend.
+Pre-production. Here be dragons, but well-fed ones. Targets OpenStack
+2026.1 with a Ceph RBD volume backend.
 
-## Why
+## Why bother
 
 Native Cinder backup drivers (S3, Swift, Ceph, NFS) do not deduplicate.
-A weekly full + incremental scheme on S3 still costs 1-2x source volume
-size per VM, per week. PBS deduplicates across the entire fleet — typical
-ratios 10-30x for VMs sharing OS bases.
+At all. A weekly full + incremental scheme on S3 still costs 1–2× source
+volume size per VM, per week. You are paying, repeatedly, to store the
+same Ubuntu base image forty times.
 
-## Architecture
+PBS deduplicates across the *entire fleet*. Typical ratios land at
+**10–30×** for VMs sharing OS bases. Forty Ubuntu boxes? PBS stores the
+common chunks once and quietly judges your old backup bill.
+
+## How the sausage is made
 
 ```
 ┌─ cinder-backup pod (custom image) ───────────────┐
@@ -40,21 +54,42 @@ ratios 10-30x for VMs sharing OS bases.
                        └──────────────┘
 ```
 
-## Constraints
+Translation: snapshot the RBD volume, map it to a block device with
+`rbd-nbd`, hand that device to `proxmox-backup-client`, get out of the
+way. The driver's main job is to know its place.
 
-- Cinder backend must be Ceph RBD. LVM, NFS, iSCSI not supported.
-- Cinder volume name in RBD must be the bare UUID (default for newer
-  cinder configs) — driver does not strip a `volume-` prefix.
-- Container must run privileged for `rbd-nbd` mapping.
-- `/tmp` and `/root/.cache` inside the container must be on tmpfs
-  (overlayfs breaks `O_TMPFILE` which `proxmox-backup-client` uses).
+## House rules (constraints)
+
+- Cinder backend **must** be Ceph RBD. LVM, NFS, iSCSI need not apply.
+- The Cinder volume name in RBD must be the bare UUID (the default for
+  newer cinder configs) — the driver does not strip a `volume-` prefix.
+  It is lazy on purpose.
+- Container runs **privileged** for `rbd-nbd` mapping. Yes, really.
+- `/tmp` and `/root/.cache` inside the container must live on tmpfs.
+  overlayfs breaks `O_TMPFILE`, which `proxmox-backup-client` leans on.
+  This will bite you exactly once and you will never forget it.
 
 ## Licensing
 
-Driver code: Apache-2.0.
-Runtime dependency `proxmox-backup-client`: AGPLv3, installed via Proxmox
-apt repository, not modified, invoked as a separate process. No combined
-work is produced. See `NOTICE` for details.
+Driver code: Apache-2.0. See `NOTICE` for runtime dependencies.
+
+## Install
+
+The driver is a normal Python package that registers a
+`cinder.backup.drivers` entry point named `pbs`. Not on PyPI yet —
+install from git (or a built sdist/wheel):
+
+```
+pip install git+https://github.com/pawhost/cinder-backup-pbs@main
+```
+
+It needs `proxmox-backup-client`, `ceph-common`, and `rbd-nbd` present in
+the same image as `cinder-backup`. Two supported ways to build that image:
+
+- **kolla-ansible** — use `kolla/template-overrides.j2`. See
+  [`docs/kolla.md`](docs/kolla.md).
+- **openstack-helm / airship** — use `ci/Dockerfile`. See
+  [`docs/install.md`](docs/install.md).
 
 ## Build
 
@@ -66,7 +101,7 @@ docker build -t registry.example/cinder-backup-pbs:dev -f ci/Dockerfile .
 
 In cinder `cinder.conf`:
 
-```
+```ini
 [DEFAULT]
 backup_driver = cinder_backup_pbs.driver.PbsBackupDriver
 
@@ -90,10 +125,20 @@ pytest tests/unit
 Integration tests need a reachable PBS plus a Ceph RBD pool. See
 `tests/integration/README.md`.
 
-## Limitations
+## Limitations (the fine print, told honestly)
 
-- No `--incremental` API surface: PBS deduplicates implicitly across all
-  backups in a namespace; cinder `parent_id` is always `None`.
-- No backup-of-backup. Use PBS `sync-job` for off-site replication.
-- Backup retention is **not** enforced by this driver. Drive cinder
-  `volume backup delete` from a scheduler (e.g. cron, WHMCS hook).
+- No `--incremental` API surface. PBS deduplicates implicitly across
+  every backup in a namespace, so cinder `parent_id` is always `None`.
+  Every backup is "full" and also somehow tiny. Don't think about it
+  too hard.
+- No backup-of-backup. Want off-site? Use PBS `sync-job` and let the
+  grown-ups handle replication.
+- Retention is **not** enforced here. Drive cinder `volume backup
+  delete` from a scheduler (cron, a WHMCS hook, a very reliable intern).
+
+---
+
+\* "best" is a quantifiable\*\* part — meaning: it's my opinion. Your
+mileage, benchmarks, and religious affiliations may vary.
+
+\*\* "quantifiable" is also my opinion.

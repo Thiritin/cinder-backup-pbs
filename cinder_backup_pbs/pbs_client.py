@@ -17,13 +17,31 @@ from __future__ import annotations
 import os
 import subprocess
 from datetime import datetime, timezone
-from typing import Optional
 
 from oslo_log import log as logging
 
 from cinder_backup_pbs.exceptions import PbsBackupError
 
 LOG = logging.getLogger(__name__)
+
+# pbc has no stable machine-readable error codes for these cases, so we match
+# on substrings. Keep the sets broad to survive wording changes across pbc
+# releases. Matched case-insensitively against decoded stderr.
+_ALREADY_EXISTS_MARKERS = (
+    "already exists",
+    "already present",
+)
+_NOT_FOUND_MARKERS = (
+    "no such file",
+    "not found",
+    "does not exist",
+    "unable to load",
+)
+
+
+def _stderr_has(error: Exception, markers: tuple[str, ...]) -> bool:
+    msg = str(error).lower()
+    return any(m in msg for m in markers)
 
 
 class PbsClient:
@@ -46,7 +64,7 @@ class PbsClient:
     # -- environment ----------------------------------------------------
 
     def _password(self) -> str:
-        with open(self.password_file, "r", encoding="utf-8") as f:
+        with open(self.password_file, encoding="utf-8") as f:
             return f.read().strip()
 
     def _env(self) -> dict:
@@ -62,7 +80,7 @@ class PbsClient:
     def _run(
         self,
         args: list[str],
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
         stdout=None,
         stdin=None,
     ) -> subprocess.CompletedProcess:
@@ -97,8 +115,7 @@ class PbsClient:
         try:
             self._run(["namespace", "create", ns], timeout=30)
         except PbsBackupError as e:
-            msg = str(e).lower()
-            if "already exists" in msg or "already present" in msg:
+            if _stderr_has(e, _ALREADY_EXISTS_MARKERS):
                 return
             raise
 
@@ -112,7 +129,7 @@ class PbsClient:
         backup_time: int,
         archive_name: str = "vm.img",
         backup_type: str = "vm",
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> str:
         """Run `pbc backup <archive>.img:<dev>` and return the ISO snapshot id.
 
@@ -149,7 +166,7 @@ class PbsClient:
         namespace: str,
         target_stdout,
         archive_name: str = "vm.img",
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> None:
         """Stream restored bytes to a writable stdout sink (e.g. dd subprocess).
 
@@ -180,7 +197,7 @@ class PbsClient:
             )
         except PbsBackupError as e:
             # 'not found' is fine on retry / double-delete
-            if "no such file" in str(e).lower() or "not found" in str(e).lower():
+            if _stderr_has(e, _NOT_FOUND_MARKERS):
                 LOG.warning("forget(%s) no-op: already gone", snapshot_path)
                 return
             raise

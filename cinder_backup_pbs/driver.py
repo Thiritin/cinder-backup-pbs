@@ -32,6 +32,7 @@ Flow per delete:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import uuid
 from typing import Any
@@ -46,6 +47,7 @@ except ImportError:  # pragma: no cover - unit tests stub this
     backup_driver = None  # type: ignore[assignment]
 
 from cinder_backup_pbs import opts
+from cinder_backup_pbs.exceptions import PbsBackupError
 from cinder_backup_pbs.pbs_client import PbsClient
 from cinder_backup_pbs.rbd_helper import RbdHelper
 
@@ -77,7 +79,49 @@ class PbsBackupDriver(_BASE_CLS):
             tmpdir=self.cfg.pbs_tmpdir,
             cache_dir=self.cfg.pbs_cache_dir,
         )
-        self.rbd = RbdHelper(pool=self.cfg.rbd_pool, user=self.cfg.rbd_user)
+        self.rbd = RbdHelper(
+            pool=self.cfg.rbd_pool,
+            user=self.cfg.rbd_user,
+            keyring=self.cfg.rbd_keyring,
+        )
+
+    # -- setup validation ----------------------------------------------
+
+    def check_for_setup_error(self):
+        """Fail fast at backup-service start instead of mid-backup.
+
+        Cinder's backup manager calls this when the driver loads. We verify
+        the bits that, if wrong, would otherwise only surface as a cryptic
+        failure on the first real backup.
+        """
+        missing = [
+            name
+            for name in ("repository", "fingerprint")
+            if not getattr(self.cfg, name, None)
+        ]
+        if missing:
+            raise PbsBackupError(
+                f"pbs_backup config incomplete: missing {', '.join(missing)}"
+            )
+
+        if not os.path.exists(PbsClient.BIN):
+            raise PbsBackupError(
+                f"proxmox-backup-client not found at {PbsClient.BIN}"
+            )
+
+        if not os.access(self.cfg.password_file, os.R_OK):
+            raise PbsBackupError(
+                f"PBS password_file not readable: {self.cfg.password_file}"
+            )
+
+        # pbc opens O_TMPFILE in TMPDIR; the dir must exist and be writable.
+        if not os.access(self.cfg.pbs_tmpdir, os.W_OK):
+            raise PbsBackupError(
+                f"pbs_tmpdir not writable: {self.cfg.pbs_tmpdir} "
+                "(must be a real tmpfs, not overlayfs)"
+            )
+
+        LOG.info("pbs backup driver setup check passed")
 
     # -- helpers --------------------------------------------------------
 
@@ -163,7 +207,6 @@ class PbsBackupDriver(_BASE_CLS):
 
         meta = self._decode_meta(backup.service_metadata or "{}")
         if not meta.get("snapshot_path"):
-            from cinder_backup_pbs.exceptions import PbsBackupError
             raise PbsBackupError(
                 f"backup {backup.id} has no PBS snapshot_path in service_metadata"
             )
@@ -191,9 +234,11 @@ class PbsBackupDriver(_BASE_CLS):
             finally:
                 if dd.stdin and not dd.stdin.closed:
                     dd.stdin.close()
-            rc = dd.wait(timeout=300)
+            # pbc has already returned by here; dd just needs to flush its
+            # buffered tail. Bound it by restore_timeout so a large volume
+            # restore is not killed by an arbitrary short ceiling.
+            rc = dd.wait(timeout=self.cfg.restore_timeout)
             if rc != 0:
-                from cinder_backup_pbs.exceptions import PbsBackupError
                 raise PbsBackupError(f"dd failed with rc={rc}")
 
         LOG.info("pbs restore done: volume=%s", volume_id)

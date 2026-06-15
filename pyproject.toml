@@ -10,15 +10,34 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Pawhost" }]
+keywords = ["openstack", "cinder", "backup", "proxmox", "pbs", "ceph", "rbd"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: OpenStack",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Archiving :: Backup",
+]
 dependencies = [
     "oslo.config>=9.0",
     "oslo.log>=5.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/pawhost/cinder-backup-pbs"
+Source = "https://github.com/pawhost/cinder-backup-pbs"
+Issues = "https://github.com/pawhost/cinder-backup-pbs/issues"
+
 [project.optional-dependencies]
 test = [
     "pytest>=8",
     "pytest-mock>=3.12",
+]
+lint = [
+    "ruff>=0.5",
 ]
 
 [project.entry-points."cinder.backup.drivers"]
@@ -30,3 +49,10 @@ include = ["cinder_backup_pbs*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

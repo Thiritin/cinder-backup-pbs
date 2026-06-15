@@ -1,0 +1,49 @@
+{#-
+  Kolla image template-override for the cinder-backup-pbs driver.
+
+  Use with kolla-build to bake proxmox-backup-client + rbd-nbd + the driver
+  into the stock kolla `cinder-backup` image, instead of maintaining a
+  separate airship-based Dockerfile.
+
+  In /etc/kolla/kolla-build.conf:
+
+    [DEFAULT]
+    template_override = /path/to/cinder-backup-pbs/kolla/template-overrides.j2
+
+  Then:
+
+    kolla-build --config-file /etc/kolla/kolla-build.conf cinder-backup
+
+  Notes:
+  * Targets the Ubuntu (Noble) kolla base. For the CentOS/Rocky base, swap
+    the apt stanza for the equivalent yum repo + dnf install.
+  * `PBS_PKG_VERSION` pins proxmox-backup-client so our stderr-string error
+    matching (namespace-exists / snapshot-not-found) stays valid across
+    rebuilds. Bump deliberately, then re-run the integration suite.
+-#}
+{% extends parent_template %}
+
+{% set cinder_backup_packages_append = ['ceph-common', 'rbd-nbd'] %}
+
+{% block cinder_backup_footer %}
+USER root
+
+RUN curl -fsSL https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
+        -o /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg \
+ && echo "deb http://download.proxmox.com/debian/pbs-client bookworm main" \
+        > /etc/apt/sources.list.d/pbs-client.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends proxmox-backup-client \
+ && rm -rf /var/lib/apt/lists/*
+
+{# Install the driver into the kolla python environment, registering the
+   `cinder.backup.drivers` entry point for `pbs`. Defaults to the git repo
+   (no PyPI release yet); override CINDER_BACKUP_PBS_SPEC to point at a tag,
+   a local sdist/wheel, or `cinder-backup-pbs` once published to PyPI. #}
+ARG CINDER_BACKUP_PBS_SPEC=git+https://github.com/pawhost/cinder-backup-pbs@main
+RUN {{ macros.install_pip(['$CINDER_BACKUP_PBS_SPEC']) }}
+
+RUN mkdir -p /pbs-tmp/cache
+
+USER cinder
+{% endblock %}
