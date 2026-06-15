@@ -32,7 +32,7 @@ published — `cinder-backup-pbs` from PyPI:
 
 ```bash
 kolla-build --config-file /etc/kolla/kolla-build.conf cinder-backup \
-    --build-args CINDER_BACKUP_PBS_SPEC=git+https://github.com/pawhost/cinder-backup-pbs@v0.1.0
+    --build-args CINDER_BACKUP_PBS_SPEC=git+https://github.com/Thiritin/cinder-backup-pbs@v0.1.0
 ```
 
 Push the resulting image to your registry and set its tag in `globals.yml`

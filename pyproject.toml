@@ -27,9 +27,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pawhost/cinder-backup-pbs"
-Source = "https://github.com/pawhost/cinder-backup-pbs"
-Issues = "https://github.com/pawhost/cinder-backup-pbs/issues"
+Homepage = "https://github.com/Thiritin/cinder-backup-pbs"
+Source = "https://github.com/Thiritin/cinder-backup-pbs"
+Issues = "https://github.com/Thiritin/cinder-backup-pbs/issues"
 
 [project.optional-dependencies]
 test = [

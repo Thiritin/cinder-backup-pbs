@@ -75,23 +75,23 @@ Driver code: Apache-2.0. See `NOTICE` for runtime dependencies.
 
 ## Install
 
-The driver is a normal Python package that registers a
-`cinder.backup.drivers` entry point named `pbs`. Not on PyPI yet —
-install from git (or a built sdist/wheel):
+Easiest: pull the prebuilt `cinder-backup` image from GitHub Container
+Registry (published on every tagged release):
 
 ```
-pip install git+https://github.com/pawhost/cinder-backup-pbs@main
+docker pull ghcr.io/thiritin/cinder-backup-pbs:latest
+```
+
+The driver itself is a normal Python package that registers a
+`cinder.backup.drivers` entry point named `pbs`. Not on PyPI yet — to
+install it standalone (e.g. into your own image), use git:
+
+```
+pip install git+https://github.com/Thiritin/cinder-backup-pbs@main
 ```
 
 It needs `proxmox-backup-client`, `ceph-common`, and `rbd-nbd` present in
-the same image as `cinder-backup`. Three options:
-
-- **Pull the prebuilt image** (openstack-helm path) — published to GitHub
-  Container Registry on every tagged release:
-
-  ```
-  docker pull ghcr.io/thiritin/cinder-backup-pbs:latest
-  ```
+the same image as `cinder-backup`. Build options:
 
 - **kolla-ansible** — use `kolla/template-overrides.j2`. See
   [`docs/kolla.md`](docs/kolla.md). (Kolla builds its own image, so it
